@@ -10,9 +10,11 @@ A simple Arduino game uses MMA8451 accelerometer and Nokia 5110 (PCD8544 based) 
 * MMA8451 based accelerometer
 * Buzzer and appropriate resistor
 
-TBA: Fritzing sketch
-
 ### Libraries used:
 
 * [u8g2](https://github.com/olikraus/u8g2) - for the graphic
 * [I2C-Sensor-Lib](https://github.com/orgua/iLib) - for the accelerometer
+
+### Fritzing sketch
+
+![Fritzing Breadboard](/marbluino_bb.png)
