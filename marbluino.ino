@@ -2,10 +2,24 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 
+#ifdef ESP8266
+#include <ESP8266WiFi.h>
+
 #define BUZZER_PIN D8
 #define DISPLAY_CS_PIN D3
 #define DISPLAY_DC_PIN D0
 #define DISPLAY_RS_PIN D4
+#endif
+
+#ifdef __AVR__
+#include <avr/sleep.h>
+
+#define BUZZER_PIN 6
+#define DISPLAY_CS_PIN 10
+#define DISPLAY_DC_PIN 9
+#define DISPLAY_RS_PIN 8
+#endif
+
 
 #define BALLSIZE 4
 #define ACC_FACTOR 0.5
@@ -254,14 +268,23 @@ void bounce(void) {
 void goToSleep() {
   showPopup("SLEEPING...", "shake to wake");
   mmaSetupMotionDetection();
+#ifdef ESP8266
   ESP.deepSleep(0);
+#endif
+#ifdef __AVR__
+set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+sleep_mode();
+#endif
 }
 
 void setup(void) {
   randomSeed(analogRead(0));
   Serial.begin(115200);
+#ifdef ESP8266
+  WiFi.mode(WIFI_OFF);
+#endif
+  
   setupMMA();
-  Serial.println("MMA8451 found!");
  
   u8g2.begin();
   u8g2.setFont(u8g2_font_baby_tf);
