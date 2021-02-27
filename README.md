@@ -5,7 +5,7 @@ A simple Arduino game uses MMA8451 accelerometer and Nokia 5110 (PCD8544 based) 
 
 ### Parts needed:
 
-* Arduino (pretty much any should work, I was using 3.3V Mini Pro with ATmega168)
+* A 3.3V microcontroller (current code works for Wemos D1 mini, should be easy to adapt for others)
 * PCD8544 based 84x48 pixel display. The game could easily be adapted to other displays and resolutions. PCD8544 is 3.3V based, so if you are using 5V board, you'll have to use resistors or IC to bring the voltage down. I was using 3.3V board.
 * MMA8451 based accelerometer
 * Buzzer and appropriate resistor
@@ -13,7 +13,7 @@ A simple Arduino game uses MMA8451 accelerometer and Nokia 5110 (PCD8544 based) 
 ### Libraries used:
 
 * [u8g2](https://github.com/olikraus/u8g2) - for the graphic
-* [I2C-Sensor-Lib](https://github.com/orgua/iLib) - for the accelerometer
+* [wire](https://www.arduino.cc/en/reference/wire) - i2c library for the accelerometer
 
 ### Fritzing sketch
 
