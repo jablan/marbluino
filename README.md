@@ -3,6 +3,8 @@
 
 A simple Arduino game uses MMA8451 accelerometer and Nokia 5110 (PCD8544 based) LCD display.
 
+![Marbluino](/marbluino.jpg)
+
 ### Parts needed:
 
 * A 3.3V microcontroller (current code works for Wemos D1 mini, should be easy to adapt for others)
