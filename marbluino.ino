@@ -12,14 +12,13 @@
 #endif
 
 #ifdef __AVR__
-#include <avr/sleep.h>
+#include "LowPower.h"
 
 #define BUZZER_PIN 6
 #define DISPLAY_CS_PIN 10
 #define DISPLAY_DC_PIN 9
 #define DISPLAY_RS_PIN 8
 #endif
-
 
 #define BALLSIZE 4
 #define ACC_FACTOR 0.5
@@ -31,18 +30,22 @@
 
 U8G2_PCD8544_84X48_F_4W_HW_SPI u8g2(U8G2_R0, DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RS_PIN);
 
+struct fpoint {
+  float x;
+  float y;
+};
+
+struct upoint {
+  uint8_t x;
+  uint8_t y;
+};
+
 uint8_t max_x, max_y, points, timer = MAX_TIMER;
-uint8_t baddies[5][2];
-float x, y, dx = 0.0, dy = 0.0;
-uint8_t bx, by;
+struct fpoint ball, speed = {0.0, 0.0};
+struct upoint flag, baddies[5];
 uint16_t tonesFlag[][2] = {{698, 1}, {880, 1}, {1047, 1}, {0, 0}};
 uint16_t tonesLevel[][2] = {{1047, 1}, {988, 1}, {1047, 1}, {988, 1}, {1047, 1}, {0, 0}};
 uint16_t tonesSad[][2] = {{262, 1}, {247, 1}, {233, 1}, {220, 3}, {0, 0}};
-
-#define NOTE_A3  220
-#define NOTE_AS3 233
-#define NOTE_B3  247
-#define NOTE_C4  262
 
 uint8_t melodyIndex;
 uint16_t (*currentMelody)[2];
@@ -124,12 +127,12 @@ void drawBoard(void) {
   static char buf[12];
   u8g2.clearBuffer();
   // draw marble
-  u8g2.drawDisc(x, y, BALLSIZE/2);
+  u8g2.drawDisc(ball.x, ball.y, BALLSIZE/2);
   // draw flag
-  u8g2.drawTriangle(bx, by-3, bx-3, by+2, bx+3, by+2);
+  u8g2.drawTriangle(flag.x, flag.y-3, flag.x-3, flag.y+2, flag.x+3, flag.y+2);
   // draw baddies
   for(int i=0; i <= baddiesCount(); i++) {
-    u8g2.drawFrame(baddies[i][0]-2, baddies[i][1]-2, 4, 4);
+    u8g2.drawFrame(baddies[i].x-2, baddies[i].y-2, 4, 4);
   }
   // write points and time
   itoa(points, buf, 10);
@@ -150,12 +153,12 @@ void showPopup(char *line_1, char *line_2) {
   u8g2.sendBuffer();
 }
 
-void placeRandomly(uint8_t *cx, uint8_t *cy) {
+void placeRandomly(struct upoint *point) {
   do {
-    *cx = random(max_x - 2*BALLSIZE) + BALLSIZE;
-    *cy = random(max_y - 2*BALLSIZE) + BALLSIZE;
+    (*point).x = random(max_x - 2*BALLSIZE) + BALLSIZE;
+    (*point).y = random(max_y - 2*BALLSIZE) + BALLSIZE;
   // ensure not spawning too close to the ball
-  } while (abs(*cx-x) + abs(*cy-y) < MIN_DISTANCE);
+  } while (abs((*point).x-ball.x) + abs((*point).y-ball.y) < MIN_DISTANCE);
 }
 
 // used to play the melody asynchronously while the user is playing
@@ -186,8 +189,8 @@ int baddiesCount(void) {
   return points/BADDIE_RATE;
 }
 
-bool isCollided(uint8_t cx, uint8_t cy) {
-  return abs(x-cx) < 3 && abs(y-cy) < 3;
+bool isCollided(struct upoint point) {
+  return abs(ball.x-point.x) < 3 && abs(ball.y-point.y) < 3;
 }
 
 void melodySad(void) {
@@ -215,24 +218,24 @@ void gameOver(void) {
   melodySad();
   points = 0;
   timer = MAX_TIMER;
-  x = max_x / 2;
-  y = max_y / 2;
-  placeRandomly(&bx, &by);
+  ball.x = max_x / 2;
+  ball.y = max_y / 2;
+  placeRandomly(&flag);
 }
 
 void checkCollision(void) {
   for(int i=0; i <= baddiesCount(); i++) {
-    if (isCollided(baddies[i][0], baddies[i][1])) {
+    if (isCollided(baddies[i])) {
       return gameOver();
     }
   }
-  if (isCollided(bx, by)) {
-    placeRandomly(&bx, &by);
+  if (isCollided(flag)) {
+    placeRandomly(&flag);
     points++;
     timer = MAX_TIMER;
     if (points % BADDIE_RATE == 0) {
       // spawn new baddie
-      placeRandomly(&(baddies[points / BADDIE_RATE][0]), &(baddies[points / BADDIE_RATE][1]));
+      placeRandomly(&(baddies[points / BADDIE_RATE]));
       melodyLevel();
     } else {
       melodyFlag();
@@ -241,27 +244,29 @@ void checkCollision(void) {
 }
 
 void updateMovement(void) {
-  x += dx;
-  y += dy;
+  ball.x += speed.x;
+  ball.y += speed.y;
   float xyz_g[3];
   getOrientation(xyz_g);
 
+#ifdef DEBUG
   Serial.print("X:\t"); Serial.print(xyz_g[0]); 
   Serial.print("\tY:\t"); Serial.print(xyz_g[1]); 
   Serial.print("\tZ:\t"); Serial.print(xyz_g[2]);
   Serial.println();
+#endif
 
-  dx += ACC_FACTOR * (-xyz_g[0]);
-  dy += ACC_FACTOR * xyz_g[1];
+  speed.x += ACC_FACTOR * (-xyz_g[0]);
+  speed.y += ACC_FACTOR * xyz_g[1];
 }
 
 // bounce off walls with a diminishing factor
 void bounce(void) {
-  if ((dx > 0 && x >= max_x-BALLSIZE) || (dx < 0 && x <= BALLSIZE)) {
-    dx = BOUNCE_FACTOR * dx;
+  if ((speed.x > 0 && ball.x >= max_x-BALLSIZE) || (speed.x < 0 && ball.x <= BALLSIZE)) {
+    speed.x = BOUNCE_FACTOR * speed.x;
   }
-  if ((dy > 0 && y >= max_y-BALLSIZE) || (dy < 0 && y <= BALLSIZE)) {
-    dy = BOUNCE_FACTOR * dy;
+  if ((speed.y > 0 && ball.y >= max_y-BALLSIZE) || (speed.y < 0 && ball.y <= BALLSIZE)) {
+    speed.y = BOUNCE_FACTOR * speed.y;
   }
 }
 
@@ -272,14 +277,15 @@ void goToSleep() {
   ESP.deepSleep(0);
 #endif
 #ifdef __AVR__
-set_sleep_mode(SLEEP_MODE_PWR_DOWN);
-sleep_mode();
+LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 #endif
 }
 
 void setup(void) {
   randomSeed(analogRead(0));
+#ifdef DEBUG
   Serial.begin(115200);
+#endif
 #ifdef ESP8266
   WiFi.mode(WIFI_OFF);
 #endif
@@ -290,9 +296,9 @@ void setup(void) {
   u8g2.setFont(u8g2_font_baby_tf);
   max_x = u8g2.getDisplayWidth();
   max_y = u8g2.getDisplayHeight();
-  x = max_x / 2;
-  y = max_y / 2;
-  placeRandomly(&bx, &by);
+  ball.x = max_x / 2;
+  ball.y = max_y / 2;
+  placeRandomly(&flag);
 }
 
 void loop(void) {
