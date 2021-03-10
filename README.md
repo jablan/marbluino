@@ -23,6 +23,10 @@ If the time runs out and the user does not have any points collects, the game as
 
 The user wakes the game by shaking it - it works using the interrupt feature of MMA845x, which fires an interrupt when it detects a certain motion pattern. The interrupt pin is connected to reset pin of the board, it resets the game and game starts. This way, the consumption is reduced from ~70mA (while the game is running) to ~0.3mA (deep sleep on ESP8266).
 
-### Fritzing sketch
+### Fritzing sketches
 
-![Fritzing Breadboard](/marbluino_bb.png)
+#### Arduino Pro Mini
+![Breadboard Arduino Pro Mini](/marbluino_bb.png)
+
+#### Wemos D1 mini
+![Breadboard Wemos D1 mini](/marbluino_8266_bb.png)
