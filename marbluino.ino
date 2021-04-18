@@ -1,6 +1,10 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include <WiredDevice.h>
+#include <RegisterBasedWiredDevice.h>
+#include <Accelerometer.h>
+#include <AccelerometerMMA8451.h>
 
 #ifdef ESP8266
 #include <ESP8266WiFi.h>
@@ -20,6 +24,23 @@
 #define DISPLAY_RS_PIN 8
 #endif
 
+/**
+ * Depending on how the sensor is oriented in relation to the display, we need to adjust sensor readings.
+ * Uncomment only one of ORN_X_ and ORN_Y_ so that the X and Y are read from correct sensor direction:
+ */
+//#define ORN_X_FROM_X
+#define ORN_X_FROM_Y
+//#define ORN_X_FROM_Z
+#define ORN_Y_FROM_X
+//#define ORN_Y_FROM_Y
+//#define ORN_Y_FROM_Z
+/**
+ * Depending on how the sensor is oriented, the reading needs to be inverted or not. Uncomment if any of
+ * X or Y reading needs to be inverted:
+ */
+#define ORN_X_INV
+//#define ORN_Y_INV
+
 #define BALLSIZE 4
 #define ACC_FACTOR 0.5
 #define BOUNCE_FACTOR -0.5
@@ -29,6 +50,7 @@
 #define BADDIE_RATE 5 // spawn new baddie on every nth gathered flag
 
 U8G2_PCD8544_84X48_F_4W_HW_SPI u8g2(U8G2_R0, DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RS_PIN);
+AccelerometerMMA8451 acc(0);
 
 struct fpoint {
   float x;
@@ -50,77 +72,23 @@ uint16_t tonesSad[][2] = {{262, 1}, {247, 1}, {233, 1}, {220, 3}, {0, 0}};
 uint8_t melodyIndex;
 uint16_t (*currentMelody)[2];
 
-// MMA8452Q I2C address is 0x1C(28)
-#define MMA_ADDR 0x1C
-
-void mmaRegWrite(byte reg, byte value) {
-  Wire.beginTransmission(MMA_ADDR);
-  Wire.write(reg);
-  Wire.write(value);
-  Wire.endTransmission();
-}
-
-void mmaSetStandbyMode() {
-  mmaRegWrite(0x2A, 0x18); //Set the device in 100 Hz ODR, Standby  
-}
-
-void mmaSetActiveMode() {
-  mmaRegWrite(0x2A, 0x19);  
-}
-
-// Causes interrupt when shaken
-void mmaSetupMotionDetection() {
-  // https://www.nxp.com/docs/en/application-note/AN4070.pdf
-  mmaSetStandbyMode();
-  mmaRegWrite(0x15, 0x78);
-  mmaRegWrite(0x17, 0x1a);
-  mmaRegWrite(0x18, 0x10);
-  // enable interrupt
-  mmaRegWrite(0x2D, 0x04);
-  mmaRegWrite(0x2E, 0x04);
-  mmaSetActiveMode();
-}
-
-void mmaDisableInterrupt() {
-  mmaRegWrite(0x2d, 0x00);
+void startMotionDetection() {
+  acc.standby();
+  acc.setMotionDetection(false, true, 0x03);
+  acc.setMotionDetectionThreshold(false, 0x1a);
+  acc.setMotionDetectionCount(0x10);
+  acc.enableInterrupt(AccelerometerMMA8451::INT_FF_MT);
+  acc.routeInterruptToInt1(AccelerometerMMA8451::INT_FF_MT);
+  acc.activate();
 }
 
 void setupMMA()
 {
-  // Initialise I2C communication as MASTER
-  Wire.begin();
-
-  mmaSetStandbyMode();
-  mmaDisableInterrupt();
-  mmaRegWrite(0x0e, 0x00); // set range to +/- 2G
-  mmaSetActiveMode();
-}
-
-void getOrientation(float xyz_g[3]) {
-  unsigned int data[7];
-
-  // Request 7 bytes of data
-  Wire.requestFrom(MMA_ADDR, 7);
- 
-  // Read 7 bytes of data
-  // status, xAccl lsb, xAccl msb, yAccl lsb, yAccl msb, zAccl lsb, zAccl msb
-  if(Wire.available() == 7) 
-  {
-    for (int i = 0; i<6; i++) {
-      data[i] = Wire.read();
-    }
-  }
-
-  // Convert the data to 12-bits
-  int iAccl[3];
-  for (int i = 0; i < 3; i++) {
-    iAccl[i] = ((data[i*2+1] << 8) | data[i*2+2]) >> 4;
-    if (iAccl[i] > 2047)
-    {
-      iAccl[i] -= 4096;
-    }
-    xyz_g[i] = (float)iAccl[i] / 1024;
-  }
+  acc.standby();
+  acc.disableInterrupt(AccelerometerMMA8451::INT_ALL);
+  acc.setDynamicRange(AccelerometerMMA8451::DR_2G);
+  acc.setOutputDataRate(AccelerometerMMA8451::ODR_50HZ_20_MS);
+  acc.activate();
 }
 
 void drawBoard(void) {
@@ -246,18 +214,34 @@ void checkCollision(void) {
 void updateMovement(void) {
   ball.x += speed.x;
   ball.y += speed.y;
-  float xyz_g[3];
-  getOrientation(xyz_g);
 
-#ifdef DEBUG
-  Serial.print("X:\t"); Serial.print(xyz_g[0]); 
-  Serial.print("\tY:\t"); Serial.print(xyz_g[1]); 
-  Serial.print("\tZ:\t"); Serial.print(xyz_g[2]);
-  Serial.println();
-#endif
+  #ifdef ORN_X_FROM_X
+  float xg = acc.readXg();
+  #endif
+  #ifdef ORN_X_FROM_Y
+  float xg = acc.readYg();
+  #endif
+  #ifdef ORN_X_FROM_Z
+  float xg = acc.readZg();
+  #endif
+  #ifdef ORN_Y_FROM_X
+  float yg = acc.readXg();
+  #endif
+  #ifdef ORN_Y_FROM_Y
+  float yg = acc.readYg();
+  #endif
+  #ifdef ORN_Y_FROM_Z
+  float yg = acc.readZg();
+  #endif
+  #ifdef ORN_X_INV
+  xg = -xg;
+  #endif
+  #ifdef ORN_Y_INV
+  yg = -yg;
+  #endif
 
-  speed.x += ACC_FACTOR * (-xyz_g[0]);
-  speed.y += ACC_FACTOR * xyz_g[1];
+  speed.x += ACC_FACTOR * xg;
+  speed.y += ACC_FACTOR * yg;
 }
 
 // bounce off walls with a diminishing factor
@@ -272,7 +256,7 @@ void bounce(void) {
 
 void goToSleep() {
   showPopup("SLEEPING...", "shake to wake");
-  mmaSetupMotionDetection();
+  startMotionDetection();
 #ifdef ESP8266
   ESP.deepSleep(0);
 #endif
