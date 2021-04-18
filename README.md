@@ -15,7 +15,7 @@ A simple Arduino game uses MMA845x accelerometer and Nokia 5110 (PCD8544 based) 
 ### Libraries used:
 
 * [u8g2](https://github.com/olikraus/u8g2) - for the graphic
-* [wire](https://www.arduino.cc/en/reference/wire) - i2c library for the accelerometer
+* [ArduinoAccelerometerDriver](https://github.com/dalmirdasilva/ArduinoAccelerometerDriver) - library for several different accelerometers, includes code for triggering interrupts on move, pulse, freefall etc.
 
 ### Power saving
 
